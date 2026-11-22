@@ -120,6 +120,7 @@ def merge(path):
 face = freetype.Face(TTF)
 UPM = face.units_per_EM
 SS = 4  # siêu lấy mẫu khi tạo SDF
+GLYPH_SCALE = 1.10  # tỉ lệ dự phòng khi font gốc không có CapLine hợp lệ
 EXTRA = (set(range(0x20, 0x7F)) | set(range(0xA0, 0x1B1)) | set(range(0x1EA0, 0x1EFA))
          | set(range(0x300, 0x324)) | {0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D, 0x2026, 0x2022})
 
@@ -146,6 +147,13 @@ def render(cp, ps, pad):
 def build_atlas(t, W, H):
     pad = t["m_AtlasPadding"]
     ps = t["m_FaceInfo"]["m_PointSize"]
+    # tỉ lệ phóng để chữ hoa của Patrick Hand cao bằng đúng font gốc
+    face.set_char_size(UPM * 64)
+    face.load_char("H", freetype.FT_LOAD_NO_SCALE)
+    ph_cap = face.glyph.metrics.horiBearingY / UPM
+    orig_cap = t["m_FaceInfo"].get("m_CapLine", 0) / ps if ps else 0
+    scale = orig_cap / ph_cap if 0.3 < orig_cap < 1.2 else GLYPH_SCALE
+    print(f"    {t['m_Name']}: phóng x{scale:.3f}")
     cps = sorted({c["m_Unicode"] for c in t["m_CharacterTable"]} | EXTRA)
     cps = [c for c in cps if c in (0, 9, 10, 13) or face.get_char_index(c)]
     while True:
@@ -156,7 +164,7 @@ def build_atlas(t, W, H):
             if cp <= 31:
                 gi, bm, m = 100000 + cp, None, dict(w=0, h=0, bx=0, by=0, adv=0)
             else:
-                gi, bm, m = render(cp, ps, pad)
+                gi, bm, m = render(cp, round(ps * scale), pad)
             if gi not in glyphs:
                 rect = (0, 0, 0, 0)
                 if bm is not None:
@@ -195,9 +203,9 @@ def build_atlas(t, W, H):
         face.load_char(ch, freetype.FT_LOAD_NO_SCALE)
         return face.glyph.metrics.horiBearingY * s
 
+    # Ascent/Descent/LineHeight giữ theo font gốc (đã nhân tỉ lệ r ở trên) để bố cục giao diện không đổi
     fi.update({"m_FamilyName": "Patrick Hand", "m_StyleName": "Regular", "m_PointSize": ps, "m_UnitsPerEM": UPM,
-               "m_AscentLine": face.ascender * s, "m_DescentLine": face.descender * s,
-               "m_LineHeight": face.height * s, "m_CapLine": height("H"), "m_MeanLine": height("x"),
+               "m_CapLine": height("H") * scale, "m_MeanLine": height("x") * scale,
                "m_Baseline": 0.0})
     t["m_AtlasPopulationMode"] = 0
     t["m_GlyphTable"] = list(glyphs.values())
