@@ -1,0 +1,6 @@
+UnityPy==1.25.4
+TypeTreeGeneratorAPI
+freetype-py
+scipy
+numpy
+Pillow
